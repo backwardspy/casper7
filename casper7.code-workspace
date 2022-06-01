@@ -1,0 +1,13 @@
+{
+    "folders": [
+        {
+            "path": "."
+        },
+        {
+            "path": "plugins/echo"
+        },
+        {
+            "path": "plugins/meatball-day"
+        }
+    ],
+}
