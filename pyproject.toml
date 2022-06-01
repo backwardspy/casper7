@@ -1,0 +1,45 @@
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.poetry]
+name = "casper7"
+version = "0.0.0"
+description = "the 7th version of casper, probably"
+authors = ["backwardspy <backwardspy@gmail.com>"]
+readme = "README.md"
+repository = "https://github.com/backwardspy/casper7"
+
+[tool.poetry.scripts]
+casper7 = "casper7.run:bot"
+
+[tool.poetry.dependencies]
+python = ">=3.10,<3.11"
+hikari-lightbulb = "^2.2.1"
+pydantic = "^1.9.1"
+tomli = "^2.0.1"
+rich = "^12.4.4"
+
+[tool.poetry.group.dev.dependencies]
+black = "^22.3.0"
+pylint = "^2.13.9"
+mypy = "^0.960"
+ptpython = "^3.0.20"
+isort = "^5.10.1"
+
+[tool.poetry-dynamic-versioning]
+enable = true
+
+[tool.isort]
+profile = "black"
+
+[tool.mypy]
+ignore_missing_imports = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_unreachable = true
+
+[tool.pylint.messages_control]
+extension-pkg-whitelist = "pydantic"

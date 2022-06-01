@@ -1,0 +1,30 @@
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.poetry]
+name = "casper7-plugin-echo"
+version = "0.1.0"
+description = "An example echo plugin that simply reads your message back to you"
+authors = ["backwardspy <backwardspy@gmail.com>"]
+license = "MIT"
+readme = "README.md"
+packages = [{include = "casper7_plugin_echo.py"}]
+
+[tool.poetry.scripts]
+casper7-plugin-echo = "casper7_plugin_echo:main"
+
+[tool.poetry.dependencies]
+python = "^3.10"
+docopt-ng = "^0.7.2"
+
+[tool.poetry.group.dev.dependencies]
+black = "^22.3.0"
+pylint = "^2.13.9"
+mypy = "^0.960"
+ward = "^0.66.0-beta.0"
+ptpython = "^3.0.20"
+isort = "^5.10.1"
+
+[tool.isort]
+profile = "black"

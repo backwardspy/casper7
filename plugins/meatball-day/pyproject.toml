@@ -1,0 +1,31 @@
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.poetry]
+name = "casper7-plugin-meatball-day"
+version = "0.1.0"
+description = ""
+authors = ["backwardspy <backwardspy@gmail.com>"]
+readme = "README.md"
+packages = [{include = "casper7_plugin_meatball_day"}]
+
+[tool.poetry.scripts]
+casper7-plugin-meatball-day = "casper7_plugin_meatball_day.run:plugin"
+
+[tool.poetry.dependencies]
+python = "^3.10"
+piccolo = {extras = ["all"], version = "^0.74.4"}
+docopt-ng = "^0.8.1"
+pendulum = "^2.1.2"
+
+[tool.poetry.group.dev.dependencies]
+black = "^22.3.0"
+pylint = "^2.13.9"
+mypy = "^0.960"
+ward = "^0.66.0-beta.0"
+ptpython = "^3.0.20"
+isort = "^5.10.1"
+
+[tool.isort]
+profile = "black"
