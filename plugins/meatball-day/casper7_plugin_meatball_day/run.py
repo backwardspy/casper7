@@ -8,7 +8,9 @@ Usage:
     casper7-plugin-meatball-day [options] meatball-channel [--] <args>
     casper7-plugin-meatball-day [options] meatball-role [--] <args>
     casper7-plugin-meatball-day [options] meatball-next
+    casper7-plugin-meatball-day refresh-role-assignments
     casper7-plugin-meatball-day --commands
+    casper7-plugin-meatball-day --jobs
     casper7-plugin-meatball-day (-h | --help)
     casper7-plugin-meatball-day --version
 
@@ -17,6 +19,7 @@ Options:
     -c --channel CHANNEL-ID  Unique ID of the channel the command was sent from.
     -u --user USER-ID        Unique ID of the user who sent the command.
     --commands               Print available commands in JSON format.
+    --jobs                   Print jobs to be scheduled in JSON format.
     -h --help                Show this screen.
     --version                Show version.
 """
@@ -35,6 +38,7 @@ from casper7_plugin_meatball_day.tables import (
     MeatballChannel,
     MeatballDay,
     MeatballRole,
+    MeatballRoleAssignment,
 )
 
 
@@ -108,6 +112,20 @@ def print_commands() -> None:
     )
 
 
+def print_jobs() -> None:
+    """Prints scheduled jobs in JSON format for casper7's query."""
+    print(
+        json.dumps(
+            [
+                {
+                    "name": "refresh-role-assignments",
+                    "schedule": "0 10 * * *",
+                }
+            ]
+        )
+    )
+
+
 async def meatball_lookup(user_id: str, *, guild_id: str) -> None:
     """Display a user's meatball day, if one is registered."""
     result = (
@@ -135,8 +153,14 @@ async def meatball_save(day: int, month: int, *, user_id: str, guild_id: str) ->
         print(f"<@{user_id}> That's not a real day... :thinking:")
         return
 
-    record = MeatballDay(guild_id=guild_id, user_id=user_id, month=month, day=day)
-    await record.save()
+    await upsert(
+        MeatballDay,
+        (MeatballDay.guild_id == guild_id) & (MeatballDay.user_id == user_id),
+        {
+            MeatballDay.month: month,
+            MeatballDay.day: day,
+        },
+    )
 
     print(f"Registered <@{user_id}>'s meatball day! :calendar:")
 
@@ -198,6 +222,100 @@ async def meatball_next(*, guild_id: str) -> None:
     )
 
 
+async def refresh_role_assignments() -> None:
+    """
+    Maintain the meatball role assignment table and tell casper7 to assign/remove roles.
+    """
+    events: list[dict] = []
+    guild_roles: dict[str, str] = {}
+    guild_channels: dict[str, str] = {}
+
+    async def get_guild_role(guild_id: str) -> str:
+        if role := guild_roles.get(guild_id):
+            return role
+
+        result = (
+            await MeatballRole.select(MeatballRole.role_id)
+            .where(MeatballRole.guild_id == guild_id)
+            .first()
+        )
+        guild_roles[guild_id] = result["role_id"]
+        return result["role_id"]
+
+    async def get_guild_channel(guild_id: str) -> str:
+        if role := guild_channels.get(guild_id):
+            return role
+
+        result = (
+            await MeatballChannel.select(MeatballChannel.channel_id)
+            .where(MeatballChannel.guild_id == guild_id)
+            .first()
+        )
+        guild_channels[guild_id] = result["channel_id"]
+        return result["channel_id"]
+
+    today = pendulum.now().date()
+
+    # assignments from days other than today should be removed.
+    to_remove = await MeatballRoleAssignment.select(
+        MeatballRoleAssignment.guild_id, MeatballRoleAssignment.user_id
+    ).where(MeatballRoleAssignment.date != today.isoformat())
+
+    for result in to_remove:
+        guild_id, user_id = itemgetter("guild_id", "user_id")(result)
+        await MeatballRoleAssignment.delete().where(
+            MeatballRoleAssignment.guild_id == guild_id,
+            MeatballRoleAssignment.user_id == user_id,
+        )
+        events.append(
+            {
+                "type": "remove_role",
+                "guild_id": guild_id,
+                "user_id": user_id,
+                "role_id": await get_guild_role(guild_id),
+            }
+        )
+
+    # meatball days for the current day should be added
+    to_add = await MeatballDay.select(
+        MeatballDay.guild_id,
+        MeatballDay.user_id,
+    ).where(MeatballDay.month == today.month, MeatballDay.day == today.day)
+
+    for result in to_add:
+        guild_id, user_id = itemgetter("guild_id", "user_id")(result)
+
+        if await MeatballRoleAssignment.exists().where(
+            MeatballRoleAssignment.guild_id == guild_id,
+            MeatballRoleAssignment.user_id == user_id,
+        ):
+            continue
+
+        guild_id, user_id = itemgetter("guild_id", "user_id")(result)
+        await MeatballRoleAssignment(
+            guild_id=guild_id,
+            user_id=user_id,
+            date=today.isoformat(),
+        ).save()
+        events.append(
+            {
+                "type": "add_role",
+                "guild_id": guild_id,
+                "user_id": user_id,
+                "role_id": await get_guild_role(guild_id),
+            }
+        )
+        events.append(
+            {
+                "type": "message",
+                "channel_id": await get_guild_channel(guild_id),
+                "text": f"It's <@{user_id}>'s meatball day! :partying_face::tada:",
+            }
+        )
+
+    print(json.dumps(events))
+
+
 async def _plugin() -> None:
     """Main entrypoint for the plugin."""
     args = docopt(
@@ -216,6 +334,8 @@ async def _plugin() -> None:
     match args:
         case {"--commands": True}:
             print_commands()
+        case {"--jobs": True}:
+            print_jobs()
         case {"meatball-lookup": True}:
             lookup_user = args["<args>"].get("user") or user_id
             await meatball_lookup(lookup_user, guild_id=guild_id)
@@ -229,6 +349,8 @@ async def _plugin() -> None:
             await meatball_role(role, guild_id=guild_id)
         case {"meatball-next": True}:
             await meatball_next(guild_id=guild_id)
+        case {"refresh-role-assignments": True}:
+            await refresh_role_assignments()
         case _:
             raise ValueError(f"unknown argument set: {args}")
 
