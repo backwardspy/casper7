@@ -2,11 +2,14 @@
 import json
 import subprocess
 from functools import cached_property
+from operator import itemgetter
 from pathlib import Path
 from typing import Any
 
 import lightbulb
 import tomli
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from apscheduler.triggers.cron import CronTrigger
 from hikari import (
     InteractionChannel,
     InteractionMember,
@@ -14,10 +17,11 @@ from hikari import (
     OptionType,
     Permissions,
     Role,
+    StartingEvent,
     User,
 )
 from pydantic import BaseModel, validator
-from rich import print
+from rich import print as rprint
 from rich.console import Group
 from rich.panel import Panel
 from rich.table import Table
@@ -84,6 +88,13 @@ class PluginCommand(BaseModel):
     args: list[PluginCommandArgument] = []
 
 
+class PluginJob(BaseModel):
+    """A job that runs on a set schedule."""
+
+    name: str
+    schedule: str
+
+
 class Plugin:
     """Wraps some sort of executable that provides slash commands."""
 
@@ -91,7 +102,9 @@ class Plugin:
         self.path = path
         self.execute = execute
 
-    def issue_command(self, command: str, *, ctx: lightbulb.Context | None) -> str:
+    def issue_command(
+        self, command: str, *, ctx: lightbulb.Context | None
+    ) -> str | None:
         """Issue a command to the plugin."""
         args = [command]
 
@@ -116,12 +129,17 @@ class Plugin:
                     ]
                 )
 
-        proc = subprocess.run(
-            self.execute.split() + args,
-            cwd=self.path,
-            stdout=subprocess.PIPE,
-            check=True,
-        )
+        try:
+            proc = subprocess.run(
+                self.execute.split() + args,
+                cwd=self.path,
+                stdout=subprocess.PIPE,
+                check=True,
+            )
+        except subprocess.CalledProcessError as ex:
+            print(f"Command {' '.join(args)} for plugin {self.version} failed: {ex}")
+            raise
+
         return proc.stdout.decode("utf-8").strip()
 
     @cached_property
@@ -135,10 +153,24 @@ class Plugin:
     @cached_property
     def commands(self) -> list[PluginCommand]:
         """Query the plugin for its commands."""
-        return [
-            PluginCommand(**command)
-            for command in json.loads(self.issue_command("--commands", ctx=None))
-        ]
+        try:
+            commands_json = self.issue_command("--commands", ctx=None)
+        except subprocess.CalledProcessError as ex:
+            print(f"Couldn't get commands for {self.version} ({ex})")
+            return []
+
+        return [PluginCommand(**command) for command in json.loads(commands_json)]
+
+    @cached_property
+    def jobs(self) -> list[PluginJob]:
+        """Query the plugin for its jobs."""
+        try:
+            jobs_json = self.issue_command("--jobs", ctx=None)
+        except subprocess.CalledProcessError as ex:
+            print(f"Couldn't get jobs for {self.version} ({ex})")
+            return []
+
+        return [PluginJob(**job) for job in json.loads(jobs_json)]
 
 
 async def _member_is_admin(member: Member) -> bool:
@@ -159,48 +191,83 @@ def _load_plugins() -> list[Plugin]:
     return plugins
 
 
+def _register_commands(plugin: Plugin, *, lb_plugin: lightbulb.Plugin) -> None:
+    for command in plugin.commands:
+
+        @lightbulb.implements(lightbulb.SlashCommand)
+        async def handler(
+            ctx: lightbulb.Context,
+            plugin: Plugin = plugin,
+            command: PluginCommand = command,
+        ) -> None:
+            if command.admin and (
+                ctx.member is None or not await _member_is_admin(ctx.member)
+            ):
+                await ctx.respond(
+                    "**You must be an admin to use this command!** :police_officer:"
+                )
+                return
+
+            response = plugin.issue_command(command.name, ctx=ctx)
+            if not response:
+                response = "*No response was returned, but the command succeeded.*"
+            await ctx.respond(response)
+
+        description = command.description
+        if command.admin:
+            description += " (Admin only!)"
+        handler = lightbulb.command(command.name, description)(handler)
+
+        for arg in command.args:
+            handler = lightbulb.option(
+                name=arg.name,
+                description=arg.description,
+                type=ARG_TYPE_MAP[arg.type],
+                required=not arg.optional,
+                default=arg.default,
+            )(handler)
+
+        lb_plugin.command(handler)
+
+
+def _register_jobs(plugin: Plugin, *, bot: lightbulb.BotApp) -> None:
+    for job in plugin.jobs:
+        print(f"Registering job {job.name} on schedule {job.schedule}")
+
+        async def handler(
+            plugin: Plugin = plugin, job: PluginJob = job, bot: lightbulb.BotApp = bot
+        ) -> None:
+            print(f"Running job {job.name} for plugin {plugin.version}")
+            events = json.loads(plugin.issue_command(job.name, ctx=None))
+            rprint(events)
+
+            for event in events:
+                match event["type"]:
+                    case "add_role":
+                        guild_id, user_id, role_id = itemgetter(
+                            "guild_id", "user_id", "role_id"
+                        )(event)
+                        await bot.rest.add_role_to_member(guild_id, user_id, role_id)
+                    case "remove_role":
+                        guild_id, user_id, role_id = itemgetter(
+                            "guild_id", "user_id", "role_id"
+                        )(event)
+                        await bot.rest.remove_role_from_member(
+                            guild_id, user_id, role_id
+                        )
+                    case "message":
+                        channel_id, text = itemgetter("channel_id", "text")(event)
+                        await bot.rest.create_message(channel_id, text)
+
+        bot.d.scheduler.add_job(handler, CronTrigger.from_crontab(job.schedule))
+
+
 def _register_plugins(plugins: list[Plugin], *, bot: lightbulb.BotApp) -> None:
     for plugin in plugins:
         name, version = plugin.version.split()
         lb_plugin = lightbulb.Plugin(name=name, description=f"{name} {version}")
-
-        for command in plugin.commands:
-
-            @lightbulb.implements(lightbulb.SlashCommand)
-            async def handler(
-                ctx: lightbulb.Context,
-                plugin: Plugin = plugin,
-                command: PluginCommand = command,
-            ) -> None:
-                if command.admin and (
-                    ctx.member is None or not await _member_is_admin(ctx.member)
-                ):
-                    await ctx.respond(
-                        "**You must be an admin to use this command!** :police_officer:"
-                    )
-                    return
-
-                response = plugin.issue_command(command.name, ctx=ctx)
-                if not response:
-                    response = "*No response was returned, but the command succeeded.*"
-                await ctx.respond(response)
-
-            description = command.description
-            if command.admin:
-                description += " (Admin only!)"
-            handler = lightbulb.command(command.name, description)(handler)
-
-            for arg in command.args:
-                handler = lightbulb.option(
-                    name=arg.name,
-                    description=arg.description,
-                    type=ARG_TYPE_MAP[arg.type],
-                    required=not arg.optional,
-                    default=arg.default,
-                )(handler)
-
-            lb_plugin.command(handler)
-
+        _register_commands(plugin, lb_plugin=lb_plugin)
+        _register_jobs(plugin, bot=bot)
         bot.add_plugin(lb_plugin)
 
 
@@ -225,7 +292,7 @@ def _make_argument_table(command: PluginCommand) -> Table | str:
 
 
 def _print_plugins(plugins: list[Plugin]) -> None:
-    print(
+    rprint(
         Group(
             *[
                 Panel.fit(
@@ -262,12 +329,19 @@ def make_bot() -> lightbulb.BotApp:
         if settings.testing_guild
         else (),
     )
+    bot.d.scheduler = AsyncIOScheduler()
+
+    @bot.listen(StartingEvent)
+    async def _(_: StartingEvent) -> None:
+        # at this point we should have an async event loop available.
+        bot.d.scheduler.start()
+
     plugins = _load_plugins()
 
     print("Loaded plugins:")
     _print_plugins(plugins)
 
-    print("Registering plugin commands...")
+    print("Registering plugins...")
     _register_plugins(plugins, bot=bot)
 
     return bot
