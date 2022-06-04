@@ -1,19 +1,22 @@
-"""Casper7 pluggable discord bot."""
+"""
+Casper7 extensible discord bot.
+"""
 import json
 import subprocess
+from dataclasses import dataclass
 from functools import cached_property
 from operator import itemgetter
-from pathlib import Path
 from typing import Any
 
 import lightbulb
-import tomli
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 from hikari import (
+    GuildMessageCreateEvent,
     InteractionChannel,
     InteractionMember,
     Member,
+    Message,
     OptionType,
     Permissions,
     Role,
@@ -41,7 +44,7 @@ ARG_TYPE_MAP = {
 
 
 def serialize_default(obj: Any) -> Any:
-    """Serializes hikari types into orjson-compatible types."""
+    """Serializes hikari types into json package compatible types."""
     match obj:
         case InteractionChannel():
             return obj.id
@@ -53,6 +56,17 @@ def serialize_default(obj: Any) -> Any:
             return obj.id
         case _:
             raise TypeError(f"Unable to serialize {repr(obj)}")
+
+
+@dataclass(frozen=True)
+class CommandContext:
+    """Context to pass to plugins when invoking a command or a listener."""
+
+    guild_id: int
+    channel_id: int
+    user_id: int
+    message_id: int
+    options: dict
 
 
 class PluginConfig(BaseModel):
@@ -95,38 +109,44 @@ class PluginJob(BaseModel):
     schedule: str
 
 
+class PluginListener(BaseModel):
+    """A listener that triggers on a specific event."""
+
+    name: str
+
+
 class Plugin:
     """Wraps some sort of executable that provides slash commands."""
 
     def __init__(self, *, execute: str) -> None:
         self.execute = execute
 
-    def issue_command(
-        self, command: str, *, ctx: lightbulb.Context | None
-    ) -> str | None:
+    def issue_command(self, command: str, *, ctx: CommandContext | None) -> str | None:
         """Issue a command to the plugin."""
-        args = [command]
-
+        args = []
         if ctx:
-            if ctx.guild_id:
-                args.extend(["--guild", str(ctx.guild_id)])
-
             args.extend(
                 [
+                    "--guild",
+                    str(ctx.guild_id),
                     "--channel",
                     str(ctx.channel_id),
                     "--user",
-                    str(ctx.author.id),
+                    str(ctx.user_id),
+                    "--message",
+                    str(ctx.message_id),
                 ]
             )
 
-            if ctx.raw_options:
-                args.extend(
-                    [
-                        "--",
-                        json.dumps(ctx.raw_options, default=serialize_default),
-                    ]
-                )
+        args.append(command)
+
+        if ctx and ctx.options:
+            args.extend(
+                [
+                    "--",
+                    json.dumps(ctx.options, default=serialize_default),
+                ]
+            )
 
         try:
             proc = subprocess.run(
@@ -183,12 +203,50 @@ class Plugin:
 
         return [PluginJob(**job) for job in json.loads(jobs_json)]
 
+    @cached_property
+    def listeners(self) -> list[PluginListener]:
+        """Query the plugin for its listeners."""
+        try:
+            listeners_json = self.issue_command("--listeners", ctx=None)
+        except subprocess.CalledProcessError as ex:
+            print(f"Couldn't get listeners for {self.version} ({ex})")
+            return []
+
+        if not listeners_json:
+            print(f"Plugin {self.version} did not return any listeners.")
+            return []
+
+        return [PluginListener(**listener) for listener in json.loads(listeners_json)]
+
 
 async def _member_is_admin(member: Member) -> bool:
     return any(
         role.permissions & Permissions.ADMINISTRATOR
         for role in await member.fetch_roles()
     )
+
+
+async def _process_events(events: list[dict], *, bot: lightbulb.BotApp) -> None:
+    for event in events:
+        match event["type"]:
+            case "add_role":
+                guild_id, user_id, role_id = itemgetter(
+                    "guild_id", "user_id", "role_id"
+                )(event)
+                await bot.rest.add_role_to_member(guild_id, user_id, role_id)
+            case "remove_role":
+                guild_id, user_id, role_id = itemgetter(
+                    "guild_id", "user_id", "role_id"
+                )(event)
+                await bot.rest.remove_role_from_member(guild_id, user_id, role_id)
+            case "message":
+                channel_id, text = itemgetter("channel_id", "text")(event)
+                await bot.rest.create_message(channel_id, text)
+            case "add_reaction":
+                channel_id, message_id, emoji = itemgetter(
+                    "channel_id", "message_id", "emoji"
+                )(event)
+                await bot.rest.add_reaction(channel_id, message_id, emoji)
 
 
 def _load_plugins() -> list[Plugin]:
@@ -220,7 +278,16 @@ def _register_commands(plugin: Plugin, *, lb_plugin: lightbulb.Plugin) -> None:
                 )
                 return
 
-            response = plugin.issue_command(command.name, ctx=ctx)
+            response = plugin.issue_command(
+                command.name,
+                ctx=CommandContext(
+                    guild_id=ctx.guild_id,
+                    channel_id=ctx.channel_id,
+                    user_id=ctx.author.id,
+                    message_id=None,
+                    options=ctx.raw_options,
+                ),
+            )
             if not response:
                 response = "*No response was returned, but the command succeeded.*"
             await ctx.respond(response)
@@ -250,28 +317,38 @@ def _register_jobs(plugin: Plugin, *, bot: lightbulb.BotApp) -> None:
             plugin: Plugin = plugin, job: PluginJob = job, bot: lightbulb.BotApp = bot
         ) -> None:
             print(f"Running job {job.name} for plugin {plugin.version}")
-            events = json.loads(plugin.issue_command(job.name, ctx=None))
-            rprint(events)
-
-            for event in events:
-                match event["type"]:
-                    case "add_role":
-                        guild_id, user_id, role_id = itemgetter(
-                            "guild_id", "user_id", "role_id"
-                        )(event)
-                        await bot.rest.add_role_to_member(guild_id, user_id, role_id)
-                    case "remove_role":
-                        guild_id, user_id, role_id = itemgetter(
-                            "guild_id", "user_id", "role_id"
-                        )(event)
-                        await bot.rest.remove_role_from_member(
-                            guild_id, user_id, role_id
-                        )
-                    case "message":
-                        channel_id, text = itemgetter("channel_id", "text")(event)
-                        await bot.rest.create_message(channel_id, text)
+            response = plugin.issue_command(job.name, ctx=None)
+            if response:
+                events = json.loads(response)
+                await _process_events(events, bot=bot)
 
         bot.d.scheduler.add_job(handler, CronTrigger.from_crontab(job.schedule))
+
+
+def _register_listeners(plugin: Plugin, *, bot: lightbulb.BotApp) -> None:
+    for listener in plugin.listeners:
+        print(f"Registering message listener {listener.name}")
+
+        async def handler(
+            message: Message,
+            plugin: Plugin = plugin,
+            listener: PluginListener = listener,
+        ) -> None:
+            response = plugin.issue_command(
+                listener.name,
+                ctx=CommandContext(
+                    guild_id=message.guild_id,
+                    channel_id=message.channel_id,
+                    user_id=message.author.id,
+                    message_id=message.id,
+                    options={"message": message.content},
+                ),
+            )
+            if response:
+                events = json.loads(response)
+                await _process_events(events, bot=bot)
+
+        bot.d.listeners.append(handler)
 
 
 def _register_plugins(plugins: list[Plugin], *, bot: lightbulb.BotApp) -> None:
@@ -280,6 +357,7 @@ def _register_plugins(plugins: list[Plugin], *, bot: lightbulb.BotApp) -> None:
         lb_plugin = lightbulb.Plugin(name=name, description=f"{name} {version}")
         _register_commands(plugin, lb_plugin=lb_plugin)
         _register_jobs(plugin, bot=bot)
+        _register_listeners(plugin, bot=bot)
         bot.add_plugin(lb_plugin)
 
 
@@ -341,12 +419,18 @@ def make_bot() -> lightbulb.BotApp:
         if settings.testing_guild
         else (),
     )
+    bot.d.listeners = []
     bot.d.scheduler = AsyncIOScheduler()
 
     @bot.listen(StartingEvent)
     async def _(_: StartingEvent) -> None:
         # at this point we should have an async event loop available.
         bot.d.scheduler.start()
+
+    @bot.listen(GuildMessageCreateEvent)
+    async def _(event: GuildMessageCreateEvent) -> None:
+        for listener in bot.d.listeners:
+            await listener(event.message)
 
     plugins = _load_plugins()
 
