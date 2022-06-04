@@ -4,10 +4,7 @@
             "path": "."
         },
         {
-            "path": "plugins/echo"
-        },
-        {
-            "path": "plugins/meatball-day"
+            "path": "../casper7-plugin-meatball-day"
         }
     ],
 }

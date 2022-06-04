@@ -26,7 +26,7 @@ from rich.console import Group
 from rich.panel import Panel
 from rich.table import Table
 
-from settings import settings
+from casper7.settings import settings
 
 ARG_TYPE_MAP = {
     "string": OptionType.STRING,
@@ -98,8 +98,7 @@ class PluginJob(BaseModel):
 class Plugin:
     """Wraps some sort of executable that provides slash commands."""
 
-    def __init__(self, *, path: Path, execute: str) -> None:
-        self.path = path
+    def __init__(self, *, execute: str) -> None:
         self.execute = execute
 
     def issue_command(
@@ -132,7 +131,6 @@ class Plugin:
         try:
             proc = subprocess.run(
                 self.execute.split() + args,
-                cwd=self.path,
                 stdout=subprocess.PIPE,
                 check=True,
             )
@@ -148,7 +146,12 @@ class Plugin:
         Plugins should return version information in the form: NAME VERSION
         For example: casper7-plugin-example 1.0.0
         """
-        return self.issue_command("--version", ctx=None)
+        result = self.issue_command("--version", ctx=None)
+
+        if not result:
+            print(f"Executable '{self.execute}' did not return version information")
+            return "Unknown n/a"
+        return result
 
     @cached_property
     def commands(self) -> list[PluginCommand]:
@@ -157,6 +160,10 @@ class Plugin:
             commands_json = self.issue_command("--commands", ctx=None)
         except subprocess.CalledProcessError as ex:
             print(f"Couldn't get commands for {self.version} ({ex})")
+            return []
+
+        if not commands_json:
+            print(f"Plugin {self.version} did not return any commands.")
             return []
 
         return [PluginCommand(**command) for command in json.loads(commands_json)]
@@ -170,6 +177,10 @@ class Plugin:
             print(f"Couldn't get jobs for {self.version} ({ex})")
             return []
 
+        if not jobs_json:
+            print(f"Plugin {self.version} did not return any jobs.")
+            return []
+
         return [PluginJob(**job) for job in json.loads(jobs_json)]
 
 
@@ -181,14 +192,15 @@ async def _member_is_admin(member: Member) -> bool:
 
 
 def _load_plugins() -> list[Plugin]:
-    plugins = []
-    for config_path in settings.plugins_root.glob("**/plugin.toml"):
-        with config_path.open("rb") as config_file:
-            config_data = tomli.load(config_file)
-        config = PluginConfig(**config_data)
-        plugins.append(Plugin(path=config_path.parent, execute=config.execute))
+    if not settings.plugins_file.exists():
+        print(
+            f"Plugins file {settings.plugins_file} does not exist, so no plugins will be loaded."
+        )
+        return []
 
-    return plugins
+    print(f"Loading plugins from {settings.plugins_file}")
+    with settings.plugins_file.open() as plugins_file:
+        return [Plugin(execute=line.strip()) for line in plugins_file]
 
 
 def _register_commands(plugin: Plugin, *, lb_plugin: lightbulb.Plugin) -> None:
@@ -312,7 +324,7 @@ def _print_plugins(plugins: list[Plugin]) -> None:
                         ],
                     ),
                     title=plugin.version,
-                    subtitle=str(plugin.path),
+                    subtitle=plugin.execute,
                     style="cyan",
                 )
                 for plugin in plugins
@@ -338,10 +350,11 @@ def make_bot() -> lightbulb.BotApp:
 
     plugins = _load_plugins()
 
-    print("Loaded plugins:")
-    _print_plugins(plugins)
+    if plugins:
+        print("Loaded plugins:")
+        _print_plugins(plugins)
 
-    print("Registering plugins...")
-    _register_plugins(plugins, bot=bot)
+        print("Registering plugins...")
+        _register_plugins(plugins, bot=bot)
 
     return bot
