@@ -5,6 +5,9 @@
         },
         {
             "path": "../casper7-plugin-meatball-day"
+        },
+        {
+            "path": "../casper7-plugin-wordle-reactions"
         }
     ],
 }
