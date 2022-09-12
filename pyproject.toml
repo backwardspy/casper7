@@ -15,19 +15,19 @@ casper7 = "casper7.run:bot"
 
 [tool.poetry.dependencies]
 python = ">=3.10,<3.11"
-hikari-lightbulb = "^2.2.2"
-pydantic = "^1.9.1"
-rich = "^12.4.4"
+hikari-lightbulb = "^2.2.4"
+pydantic = "^1.10.2"
+rich = "^12.5.1"
 APScheduler = "^3.9.1"
 platformdirs = "^2.5.2"
 
 [tool.poetry.group.dev.dependencies]
-black = "^22.3.0"
-pylint = "^2.14.1"
-mypy = "^0.961"
-ptpython = "^3.0.20"
+black = "^22.8.0"
+pylint = "^2.15.2"
+mypy = "^0.971"
 isort = "^5.10.1"
-ward = "^0.66.0b0"
+ward = "^0.66.1b0"
+ipython = "^8.5.0"
 
 [tool.poetry-dynamic-versioning]
 enable = true
