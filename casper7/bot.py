@@ -133,10 +133,11 @@ class Plugin:
                     str(ctx.channel_id),
                     "--user",
                     str(ctx.user_id),
-                    "--message",
-                    str(ctx.message_id),
                 ]
             )
+
+            if ctx.message_id:
+                args.extend(["--message", str(ctx.message_id)])
 
         args.append(command)
 
