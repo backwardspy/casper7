@@ -253,11 +253,14 @@ graph = ["objgraph (>=1.7.2)"]
 
 [[package]]
 name = "executing"
-version = "1.0.0"
+version = "1.1.0"
 description = "Get the currently executing AST node of a frame, and other information"
 category = "dev"
 optional = false
 python-versions = "*"
+
+[package.extras]
+tests = ["asttokens", "littleutils", "pytest", "rich"]
 
 [[package]]
 name = "frozenlist"
@@ -269,21 +272,21 @@ python-versions = ">=3.7"
 
 [[package]]
 name = "hikari"
-version = "2.0.0.dev110"
+version = "2.0.0.dev111"
 description = "A sane Discord API for Python 3 built on asyncio and good intentions"
 category = "main"
 optional = false
-python-versions = ">=3.8.0,<3.11"
+python-versions = ">=3.8.0,<3.12"
 
 [package.dependencies]
 aiohttp = ">=3.8,<4.0"
 attrs = ">=22.1,<23.0"
-colorlog = ">=6.6,<7.0"
+colorlog = ">=6.7,<7.0"
 multidict = ">=6.0,<7.0"
 
 [package.extras]
 server = ["pynacl (>=1.5,<2.0)"]
-speedups = ["Brotli (>=1.0,<2.0)", "aiodns (>=3.0,<4.0)", "cchardet (>=2.1,<3.0)", "ciso8601 (>=2.2,<3.0)"]
+speedups = ["aiohttp[speedups] (>=3.8,<4.0)", "ciso8601 (>=2.2,<3.0)"]
 
 [[package]]
 name = "hikari-lightbulb"
@@ -639,7 +642,7 @@ jupyter = ["ipywidgets (>=7.5.1,<8.0.0)"]
 
 [[package]]
 name = "setuptools"
-version = "65.3.0"
+version = "65.4.0"
 description = "Easily download, build, install, upgrade, and uninstall Python packages"
 category = "main"
 optional = false
@@ -668,7 +671,7 @@ python-versions = ">=2.7, !=3.0.*, !=3.1.*, !=3.2.*"
 
 [[package]]
 name = "stack-data"
-version = "0.5.0"
+version = "0.5.1"
 description = "Extract data from python stack frames and tracebacks for informative displays"
 category = "dev"
 optional = false
@@ -692,7 +695,7 @@ python-versions = ">=3.7"
 
 [[package]]
 name = "tomlkit"
-version = "0.11.4"
+version = "0.11.5"
 description = "Style preserving TOML library"
 category = "dev"
 optional = false
@@ -719,7 +722,7 @@ python-versions = ">=3.7"
 
 [[package]]
 name = "tzdata"
-version = "2022.2"
+version = "2022.4"
 description = "Provider of IANA time zone data"
 category = "main"
 optional = false
@@ -977,8 +980,8 @@ dill = [
     {file = "dill-0.3.5.1.tar.gz", hash = "sha256:d75e41f3eff1eee599d738e76ba8f4ad98ea229db8b085318aa2b3333a208c86"},
 ]
 executing = [
-    {file = "executing-1.0.0-py2.py3-none-any.whl", hash = "sha256:550d581b497228b572235e633599133eeee67073c65914ca346100ad56775349"},
-    {file = "executing-1.0.0.tar.gz", hash = "sha256:98daefa9d1916a4f0d944880d5aeaf079e05585689bebd9ff9b32e31dd5e1017"},
+    {file = "executing-1.1.0-py2.py3-none-any.whl", hash = "sha256:4a6d96ba89eb3dcc11483471061b42b9006d8c9f81c584dd04246944cd022530"},
+    {file = "executing-1.1.0.tar.gz", hash = "sha256:2c2c07d1ec4b2d8f9676b25170f1d8445c0ee2eb78901afb075a4b8d83608c6a"},
 ]
 frozenlist = [
     {file = "frozenlist-1.3.1-cp310-cp310-macosx_10_9_universal2.whl", hash = "sha256:5f271c93f001748fc26ddea409241312a75e13466b06c94798d1a341cf0e6989"},
@@ -1042,8 +1045,8 @@ frozenlist = [
     {file = "frozenlist-1.3.1.tar.gz", hash = "sha256:3a735e4211a04ccfa3f4833547acdf5d2f863bfeb01cfd3edaffbc251f15cec8"},
 ]
 hikari = [
-    {file = "hikari-2.0.0.dev110-py3-none-any.whl", hash = "sha256:a9fd417c969e5686a3d71e811ad526253ad10e5d87dec9cd8c39774a67f6fb06"},
-    {file = "hikari-2.0.0.dev110.tar.gz", hash = "sha256:0a455156a62228a21b7135c0ad081892f05e3d8a84678997f683eee787b4c991"},
+    {file = "hikari-2.0.0.dev111-py3-none-any.whl", hash = "sha256:91ddb3214ab60daaf8706a208d1bb7404368ddf4fd7fc74dd043449902473ba5"},
+    {file = "hikari-2.0.0.dev111.tar.gz", hash = "sha256:1c1cb0827725f85a6f61ad6ed75bb4342aad6f046d26a811e4dbeb12a0ef544d"},
 ]
 hikari-lightbulb = [
     {file = "hikari-lightbulb-2.2.4.tar.gz", hash = "sha256:3e216c8332748c12d0f82df11d14a45b0cea476d1bfea7a2e917411aeba78ed0"},
@@ -1347,8 +1350,8 @@ rich = [
     {file = "rich-12.5.1.tar.gz", hash = "sha256:63a5c5ce3673d3d5fbbf23cd87e11ab84b6b451436f1b7f19ec54b6bc36ed7ca"},
 ]
 setuptools = [
-    {file = "setuptools-65.3.0-py3-none-any.whl", hash = "sha256:2e24e0bec025f035a2e72cdd1961119f557d78ad331bb00ff82efb2ab8da8e82"},
-    {file = "setuptools-65.3.0.tar.gz", hash = "sha256:7732871f4f7fa58fb6bdcaeadb0161b2bd046c85905dbaa066bdcbcc81953b57"},
+    {file = "setuptools-65.4.0-py3-none-any.whl", hash = "sha256:c2d2709550f15aab6c9110196ea312f468f41cd546bceb24127a1be6fdcaeeb1"},
+    {file = "setuptools-65.4.0.tar.gz", hash = "sha256:a8f6e213b4b0661f590ccf40de95d28a177cd747d098624ad3f69c40287297e9"},
 ]
 shellingham = [
     {file = "shellingham-1.5.0-py2.py3-none-any.whl", hash = "sha256:a8f02ba61b69baaa13facdba62908ca8690a94b8119b69f5ec5873ea85f7391b"},
@@ -1359,16 +1362,16 @@ six = [
     {file = "six-1.16.0.tar.gz", hash = "sha256:1e61c37477a1626458e36f7b1d82aa5c9b094fa4802892072e49de9c60c4c926"},
 ]
 stack-data = [
-    {file = "stack_data-0.5.0-py3-none-any.whl", hash = "sha256:66d2ebd3d7f29047612ead465b6cae5371006a71f45037c7e2507d01367bce3b"},
-    {file = "stack_data-0.5.0.tar.gz", hash = "sha256:715c8855fbf5c43587b141e46cc9d9339cc0d1f8d6e0f98ed0d01c6cb974e29f"},
+    {file = "stack_data-0.5.1-py3-none-any.whl", hash = "sha256:5120731a18ba4c82cefcf84a945f6f3e62319ef413bfc210e32aca3a69310ba2"},
+    {file = "stack_data-0.5.1.tar.gz", hash = "sha256:95eb784942e861a3d80efd549ff9af6cf847d88343a12eb681d7157cfcb6e32b"},
 ]
 tomli = [
     {file = "tomli-2.0.1-py3-none-any.whl", hash = "sha256:939de3e7a6161af0c887ef91b7d41a53e7c5a1ca976325f429cb46ea9bc30ecc"},
     {file = "tomli-2.0.1.tar.gz", hash = "sha256:de526c12914f0c550d15924c62d72abc48d6fe7364aa87328337a31007fe8a4f"},
 ]
 tomlkit = [
-    {file = "tomlkit-0.11.4-py3-none-any.whl", hash = "sha256:25d4e2e446c453be6360c67ddfb88838cfc42026322770ba13d1fbd403a93a5c"},
-    {file = "tomlkit-0.11.4.tar.gz", hash = "sha256:3235a9010fae54323e727c3ac06fb720752fe6635b3426e379daec60fbd44a83"},
+    {file = "tomlkit-0.11.5-py3-none-any.whl", hash = "sha256:f2ef9da9cef846ee027947dc99a45d6b68a63b0ebc21944649505bf2e8bc5fe7"},
+    {file = "tomlkit-0.11.5.tar.gz", hash = "sha256:571854ebbb5eac89abcb4a2e47d7ea27b89bf29e09c35395da6f03dd4ae23d1c"},
 ]
 traitlets = [
     {file = "traitlets-5.4.0-py3-none-any.whl", hash = "sha256:93663cc8236093d48150e2af5e2ed30fc7904a11a6195e21bab0408af4e6d6c8"},
@@ -1379,8 +1382,8 @@ typing-extensions = [
     {file = "typing_extensions-4.3.0.tar.gz", hash = "sha256:e6d2677a32f47fc7eb2795db1dd15c1f34eff616bcaf2cfb5e997f854fa1c4a6"},
 ]
 tzdata = [
-    {file = "tzdata-2022.2-py2.py3-none-any.whl", hash = "sha256:c3119520447d68ef3eb8187a55a4f44fa455f30eb1b4238fa5691ba094f2b05b"},
-    {file = "tzdata-2022.2.tar.gz", hash = "sha256:21f4f0d7241572efa7f7a4fdabb052e61b55dc48274e6842697ccdf5253e5451"},
+    {file = "tzdata-2022.4-py2.py3-none-any.whl", hash = "sha256:74da81ecf2b3887c94e53fc1d466d4362aaf8b26fc87cda18f22004544694583"},
+    {file = "tzdata-2022.4.tar.gz", hash = "sha256:ada9133fbd561e6ec3d1674d3fba50251636e918aa97bd59d63735bef5a513bb"},
 ]
 tzlocal = [
     {file = "tzlocal-4.2-py3-none-any.whl", hash = "sha256:89885494684c929d9191c57aa27502afc87a579be5cdd3225c77c463ea043745"},
