@@ -451,6 +451,12 @@ def make_bot() -> lightbulb.BotApp:
     @lightbulb.command("invoke-job", "Manually execute a plugin job")
     @lightbulb.implements(lightbulb.SlashCommand)
     async def invoke_job(ctx: lightbulb.Context) -> None:
+        if ctx.member is None or not await _member_is_admin(ctx.member):
+            await ctx.respond(
+                "**You must be an admin to use this command!** :police_officer:"
+            )
+            return
+
         scheduler = cast(AsyncIOScheduler, bot.d.scheduler)
         job: Job | None = scheduler.get_job(ctx.options["job-id"])
 
