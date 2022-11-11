@@ -149,14 +149,21 @@ class Plugin:
                 ]
             )
 
+        args = self.execute.split() + args
+
         try:
             proc = subprocess.run(
-                self.execute.split() + args,
+                args,
                 stdout=subprocess.PIPE,
                 check=True,
             )
         except subprocess.CalledProcessError as ex:
-            print(f"Command {' '.join(args)} for plugin {self.version} failed: {ex}")
+            print(
+                f"Command \"{' '.join(args)}\" for plugin {self.version} failed: {ex}"
+            )
+            raise
+        except FileNotFoundError as ex:
+            print(f"Command \"{' '.join(args)}\" failed: {ex}")
             raise
 
         return proc.stdout.decode("utf-8").strip()
