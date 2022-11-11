@@ -4,11 +4,13 @@ Casper7 extensible discord bot.
 import json
 import subprocess
 from dataclasses import dataclass
+from datetime import datetime
 from functools import cached_property
 from operator import itemgetter
-from typing import Any
+from typing import Any, cast
 
 import lightbulb
+from apscheduler.job import Job
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 from hikari import (
@@ -94,7 +96,7 @@ class PluginCommandArgument(BaseModel):
 
 
 class PluginCommand(BaseModel):
-    """A command with 0 or more arguments. These are convert into slash commands."""
+    """A command with 0 or more arguments. These are converted into slash commands."""
 
     name: str
     description: str
@@ -330,7 +332,11 @@ def _register_jobs(plugin: Plugin, *, bot: lightbulb.BotApp) -> None:
                 events = json.loads(response)
                 await _process_events(events, bot=bot)
 
-        bot.d.scheduler.add_job(handler, CronTrigger.from_crontab(job.schedule))
+        bot.d.scheduler.add_job(
+            handler,
+            CronTrigger.from_crontab(job.schedule),
+            id=f"{plugin.execute.lower().replace(' ', '-')}::{job.name}",
+        )
 
 
 def _register_listeners(plugin: Plugin, *, bot: lightbulb.BotApp) -> None:
@@ -439,6 +445,24 @@ def make_bot() -> lightbulb.BotApp:
     async def _(event: GuildMessageCreateEvent) -> None:
         for listener in bot.d.listeners:
             await listener(event.message)
+
+    @bot.command
+    @lightbulb.option("job-id", "The job to invoke")
+    @lightbulb.command("invoke-job", "Manually execute a plugin job")
+    @lightbulb.implements(lightbulb.SlashCommand)
+    async def invoke_job(ctx: lightbulb.Context) -> None:
+        scheduler = cast(AsyncIOScheduler, bot.d.scheduler)
+        job: Job | None = scheduler.get_job(ctx.options["job-id"])
+
+        if not job:
+            job_ids = [job.id for job in scheduler.get_jobs()]
+            job_list = "\n".join([f" - {job_id}" for job_id in job_ids])
+            await ctx.respond(f"Job not found. Available jobs:\n{job_list}")
+            return
+
+        job.modify(next_run_time=datetime.now())
+
+        await ctx.respond("Job rescheduled successfully!")
 
     plugins = _load_plugins()
 
