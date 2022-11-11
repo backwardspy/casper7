@@ -28,8 +28,8 @@ mypy = "^0.971"
 isort = "^5.10.1"
 ward = "^0.66.1b0"
 ipython = "^8.5.0"
-casper7-plugin-meatball-day = { path = "../casper7-plugin-meatball-day", develop = true }
-casper7-plugin-wordle-reactions = { path = "../casper7-plugin-wordle-reactions", develop = true }
+# casper7-plugin-meatball-day = { path = "../casper7-plugin-meatball-day", develop = true }
+# casper7-plugin-wordle-reactions = { path = "../casper7-plugin-wordle-reactions", develop = true }
 
 [tool.poetry-dynamic-versioning]
 enable = true

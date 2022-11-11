@@ -1,6 +1,6 @@
 FROM python:3.10 AS build
 
-RUN pip install poetry==1.2.0b1
+RUN pip install poetry
 RUN poetry config virtualenvs.create false
 
 ADD . .
