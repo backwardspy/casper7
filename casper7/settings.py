@@ -11,6 +11,7 @@ class Settings(BaseSettings):
 
     class Config:
         """Allows you to put your discord token into a docker secret."""
+
         secrets_dir = Path("/run/secrets")
 
     # the file to read plugin executables from, one per line.
@@ -21,6 +22,9 @@ class Settings(BaseSettings):
 
     # if set, creates guild commands instead of global commands.
     testing_guild: int | None = None
+
+    # if set, initialises the sentry SDK for error reporting
+    sentry_dsn: str | None = None
 
 
 settings = Settings()
