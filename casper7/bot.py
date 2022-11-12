@@ -15,6 +15,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 from hikari import (
     GuildMessageCreateEvent,
+    Intents,
     InteractionChannel,
     InteractionMember,
     Member,
@@ -25,6 +26,7 @@ from hikari import (
     StartingEvent,
     User,
 )
+from loguru import logger
 from pydantic import BaseModel, validator
 from rich import print as rprint
 from rich.console import Group
@@ -280,6 +282,10 @@ def _register_commands(plugin: Plugin, *, lb_plugin: lightbulb.Plugin) -> None:
             plugin: Plugin = plugin,
             command: PluginCommand = command,
         ) -> None:
+            logger.info(
+                f"command handler invoked for {command.name} in {plugin.version}"
+            )
+
             if command.admin and (
                 ctx.member is None or not await _member_is_admin(ctx.member)
             ):
@@ -321,12 +327,13 @@ def _register_commands(plugin: Plugin, *, lb_plugin: lightbulb.Plugin) -> None:
 
 def _register_jobs(plugin: Plugin, *, bot: lightbulb.BotApp) -> None:
     for job in plugin.jobs:
-        print(f"Registering job {job.name} on schedule {job.schedule}")
+        logger.info(f"registering job {job.name} on schedule {job.schedule}")
 
         async def handler(
             plugin: Plugin = plugin, job: PluginJob = job, bot: lightbulb.BotApp = bot
         ) -> None:
-            print(f"Running job {job.name} for plugin {plugin.version}")
+            logger.debug(f"running job {job.name} for plugin {plugin.version}")
+
             response = plugin.issue_command(job.name, ctx=None)
             if response:
                 events = json.loads(response)
@@ -341,13 +348,17 @@ def _register_jobs(plugin: Plugin, *, bot: lightbulb.BotApp) -> None:
 
 def _register_listeners(plugin: Plugin, *, bot: lightbulb.BotApp) -> None:
     for listener in plugin.listeners:
-        print(f"Registering message listener {listener.name}")
+        logger.info(f"registering message listener {listener.name}")
 
         async def handler(
             message: Message,
             plugin: Plugin = plugin,
             listener: PluginListener = listener,
         ) -> None:
+            logger.info(
+                f'listener "{listener.name}" in {plugin.version} on message: {message.content}'
+            )
+
             response = plugin.issue_command(
                 listener.name,
                 ctx=CommandContext(
@@ -432,6 +443,7 @@ def make_bot() -> lightbulb.BotApp:
         default_enabled_guilds=[settings.testing_guild]
         if settings.testing_guild
         else (),
+        intents=Intents.ALL_UNPRIVILEGED | Intents.MESSAGE_CONTENT,
     )
     bot.d.listeners = []
     bot.d.scheduler = AsyncIOScheduler()
