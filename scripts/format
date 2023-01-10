@@ -1,5 +1,0 @@
-#!/bin/sh
-. scripts/_common
-
-isort .
-black .

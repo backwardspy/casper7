@@ -1,7 +1,0 @@
-#!/bin/sh
-. scripts/_common
-
-isort --check .
-black --check .
-pylint casper7 settings
-mypy .
