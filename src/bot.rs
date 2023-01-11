@@ -1,4 +1,4 @@
-use std::env;
+use std::{env, time::Duration};
 
 use color_eyre::{eyre::eyre, Result};
 use serenity::{
@@ -9,7 +9,7 @@ use serenity::{
             application_command::ApplicationCommandInteraction, Interaction,
             InteractionResponseType,
         },
-        GuildId, Ready,
+        GuildId, Message, Ready,
     },
     prelude::*,
     Client,
@@ -18,9 +18,10 @@ use sqlx::{
     sqlite::{SqliteConnectOptions, SqlitePoolOptions},
     SqlitePool,
 };
+use tokio_cron_scheduler::JobScheduler;
 use tracing::{error, info, instrument, warn};
 
-use crate::commands;
+use crate::{commands, jobs, listeners};
 
 #[instrument]
 fn use_testing_guild() -> Option<GuildId> {
@@ -69,10 +70,52 @@ struct Bot {
     db: SqlitePool,
 }
 
-#[derive(Debug)]
 pub(crate) struct CommandContext<'a> {
     pub(crate) db: &'a SqlitePool,
     pub(crate) interaction: &'a ApplicationCommandInteraction,
+}
+
+#[derive(Clone)]
+pub(crate) struct JobContext {
+    pub(crate) ctx: Context,
+    pub(crate) db: SqlitePool,
+}
+
+async fn scheduler_thread(ctx: Context, db: SqlitePool) -> Result<()> {
+    let scheduler = JobScheduler::new().await?;
+
+    let job_ctx = JobContext { ctx, db };
+
+    for job in jobs::all(job_ctx)?.into_iter() {
+        scheduler.add(job).await?;
+    }
+
+    scheduler.start().await?;
+
+    loop {
+        tokio::time::sleep(Duration::from_millis(500)).await;
+    }
+}
+
+impl Bot {
+    async fn spawn_scheduler(&self, ctx: Context) -> Result<()> {
+        info!("Spawning scheduler");
+
+        let pool = self.db.clone();
+
+        std::thread::Builder::new()
+            .name("schedule thread".to_string())
+            .spawn(move || {
+                tokio::runtime::Builder::new_multi_thread()
+                    .enable_all()
+                    .build()
+                    .expect("Build scheduler runtime failed")
+                    .block_on(scheduler_thread(ctx, pool))
+                    .expect("Scheduler thread crashed");
+            })?;
+
+        Ok(())
+    }
 }
 
 #[async_trait]
@@ -87,6 +130,16 @@ impl EventHandler for Bot {
             info!("Setting up global slash commands");
             global_command_creator(&ctx).await;
         }
+    }
+
+    async fn cache_ready(&self, ctx: Context, _guilds: Vec<GuildId>) {
+        if let Err(e) = self.spawn_scheduler(ctx.clone()).await {
+            error!("Failed to setup scheduler: {e}");
+        }
+    }
+
+    async fn message(&self, ctx: Context, message: Message) {
+        listeners::dispatch(ctx, message);
     }
 
     async fn interaction_create(&self, ctx: Context, interaction: Interaction) {
