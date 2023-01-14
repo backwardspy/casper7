@@ -1,5 +1,5 @@
 INSERT
-INTO meatball_channels(
+INTO meatball_channel(
     guild_id,
     channel_id
 )

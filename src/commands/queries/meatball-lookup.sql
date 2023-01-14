@@ -2,7 +2,7 @@ SELECT
     month,
     day
 FROM
-    meatball_days
+    meatball_day
 WHERE
     guild_id = ? AND
     user_id = ?

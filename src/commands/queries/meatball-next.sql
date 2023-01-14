@@ -3,6 +3,6 @@ SELECT
     day,
     month
 FROM
-    meatball_days
+    meatball_day
 WHERE
     guild_id = ?

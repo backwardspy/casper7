@@ -1,4 +1,4 @@
-INSERT INTO meatball_days (
+INSERT INTO meatball_day (
        guild_id,
        user_id,
        month,

@@ -1,5 +1,5 @@
 INSERT
-INTO meatball_roles(
+INTO meatball_role(
     guild_id,
     role_id
 )

@@ -4,4 +4,3 @@ FROM
     meatball_role
 WHERE
     guild_id = ?
-

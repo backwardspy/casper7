@@ -1,5 +1,5 @@
 DELETE
-FROM meatball_days
+FROM meatball_day
 WHERE
     guild_id = ? AND
     user_id = ?
