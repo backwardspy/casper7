@@ -50,23 +50,21 @@ fn opt(
 }
 
 /// Register all slash commands.
-pub(crate) fn register_all(
-    setter: &mut CreateApplicationCommands,
-) -> &mut CreateApplicationCommands {
+pub fn register_all(setter: &mut CreateApplicationCommands) -> &mut CreateApplicationCommands {
     setter
         .set_application_commands(ping::get_commands())
         .set_application_commands(meatball::get_commands())
 }
 
 #[instrument(skip(context))]
-pub(crate) async fn dispatch(
+pub async fn dispatch(
     name: &str,
     options: &[CommandDataOption],
     context: CommandContext<'_>,
 ) -> Result<String> {
     info!("Starting dispatch");
 
-    if let Some(content) = ping::dispatch(name, options, &context).await? {
+    if let Some(content) = ping::dispatch(name, options, &context) {
         return Ok(content);
     }
 

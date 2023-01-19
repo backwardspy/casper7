@@ -1,12 +1,18 @@
+#![warn(
+    clippy::all,
+    clippy::pedantic,
+    clippy::nursery,
+    clippy::unwrap_used,
+    clippy::expect_used
+)]
 mod bot;
 mod commands;
+mod config;
 mod jobs;
 mod listeners;
 mod serenity_ext;
 
-use std::env;
-
-use color_eyre::eyre::{eyre, Result};
+use color_eyre::eyre::Result;
 use tracing::{instrument, warn};
 
 #[tokio::main]
@@ -15,6 +21,6 @@ async fn main() -> Result<()> {
     color_eyre::install()?;
     tracing_subscriber::fmt::init();
 
-    let token = env::var("DISCORD_TOKEN").map_err(|_| eyre!("$DISCORD_TOKEN not set"))?;
+    let token = config::discord_token()?;
     bot::run(&token).await
 }

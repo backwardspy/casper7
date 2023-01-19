@@ -1,7 +1,9 @@
+use color_eyre::Result;
 use serenity::{model::prelude::Message, prelude::Context};
 
 mod wordle_reactions;
 
-pub(crate) fn dispatch(ctx: Context, msg: Message) {
-    wordle_reactions::dispatch(ctx, msg);
+pub async fn dispatch(ctx: &Context, msg: Message) -> Result<()> {
+    wordle_reactions::dispatch(ctx, msg).await?;
+    Ok(())
 }

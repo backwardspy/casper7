@@ -6,7 +6,7 @@ use serenity::model::{
     user::User,
 };
 
-pub(crate) fn get_integer_option(options: &[CommandDataOption], index: usize) -> Option<i64> {
+pub fn get_integer_option(options: &[CommandDataOption], index: usize) -> Option<i64> {
     let option = match options.get(index) {
         Some(option) => option,
         None => return None,
@@ -24,7 +24,7 @@ pub(crate) fn get_integer_option(options: &[CommandDataOption], index: usize) ->
     }
 }
 
-pub(crate) fn get_user_option(options: &[CommandDataOption], index: usize) -> Option<&User> {
+pub fn get_user_option(options: &[CommandDataOption], index: usize) -> Option<&User> {
     let option = match options.get(index) {
         Some(option) => option,
         None => return None,
@@ -42,10 +42,7 @@ pub(crate) fn get_user_option(options: &[CommandDataOption], index: usize) -> Op
     }
 }
 
-pub(crate) fn get_channel_option(
-    options: &[CommandDataOption],
-    index: usize,
-) -> Option<&PartialChannel> {
+pub fn get_channel_option(options: &[CommandDataOption], index: usize) -> Option<&PartialChannel> {
     let option = match options.get(index) {
         Some(option) => option,
         None => return None,
@@ -63,7 +60,7 @@ pub(crate) fn get_channel_option(
     }
 }
 
-pub(crate) fn get_role_option(options: &[CommandDataOption], index: usize) -> Option<&Role> {
+pub fn get_role_option(options: &[CommandDataOption], index: usize) -> Option<&Role> {
     let option = match options.get(index) {
         Some(option) => option,
         None => return None,

@@ -29,7 +29,7 @@ const FORGET: &str = "meatball-forget";
 const CHANNEL: &str = "meatball-channel";
 const ROLE: &str = "meatball-role";
 
-pub(crate) fn get_commands() -> Vec<CreateApplicationCommand> {
+pub fn get_commands() -> Vec<CreateApplicationCommand> {
     vec![
         cmd_custom(LOOKUP, "Find a user's meatball day", |cmd| {
             cmd.add_option(opt(
@@ -78,7 +78,7 @@ pub(crate) fn get_commands() -> Vec<CreateApplicationCommand> {
     ]
 }
 
-pub(crate) async fn dispatch(
+pub async fn dispatch(
     name: &str,
     options: &[CommandDataOption],
     context: &CommandContext<'_>,
@@ -101,7 +101,7 @@ async fn lookup(options: &[CommandDataOption], context: &CommandContext<'_>) -> 
         .guild_id
         .ok_or(eyre!("Command run without guild"))?;
 
-    let row: Option<(i32, i32)> = sqlx::query_as(include_str!("queries/meatball-lookup.sql"))
+    let row: Option<(u32, u32)> = sqlx::query_as(include_str!("queries/meatball-lookup.sql"))
         .bind(guild.to_string())
         .bind(user.id.to_string())
         .fetch_optional(context.db)
@@ -109,7 +109,7 @@ async fn lookup(options: &[CommandDataOption], context: &CommandContext<'_>) -> 
 
     Ok(if let Some((day, month)) = row {
         let date = chrono::Utc
-            .with_ymd_and_hms(2000, month as u32, day as u32, 0, 0, 0)
+            .with_ymd_and_hms(2000, month, day, 0, 0, 0)
             .earliest()
             .ok_or(eyre!("Failed to create dummy date for lookup return"))?;
         format!(
@@ -167,6 +167,11 @@ async fn next(_options: &[CommandDataOption], context: &CommandContext<'_>) -> R
     )
 }
 
+const fn days_in_month(month: i64) -> i64 {
+    #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
+    [31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31][month as usize - 1]
+}
+
 async fn save(options: &[CommandDataOption], context: &CommandContext<'_>) -> Result<String> {
     let guild = context
         .interaction
@@ -181,7 +186,7 @@ async fn save(options: &[CommandDataOption], context: &CommandContext<'_>) -> Re
         return Ok("That's not a real month... :thinking:".to_owned());
     }
 
-    let num_days = [31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31][month as usize - 1];
+    let num_days = days_in_month(month);
     if day < 1 || day > num_days {
         return Ok("That's not a real day of the month... :thinking:".to_owned());
     }

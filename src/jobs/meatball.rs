@@ -9,7 +9,7 @@ use tracing::info;
 
 use crate::bot::JobContext;
 
-pub(crate) async fn update_role_assignments(ctx: JobContext) -> Result<()> {
+pub async fn update_role_assignments(ctx: JobContext) -> Result<()> {
     remove_expired_assignments(&ctx).await?;
     add_pending_assignments(&ctx).await?;
     Ok(())
@@ -42,7 +42,7 @@ async fn get_guild_channel(guild: GuildId, pool: &SqlitePool) -> Result<ChannelI
 async fn add_pending_assignments(ctx: &JobContext) -> Result<()> {
     let pending = get_pending_assignments(&ctx.db).await?;
 
-    for (guild, user) in pending.into_iter() {
+    for (guild, user) in pending {
         add_pending_assignment(guild, user, ctx).await?;
     }
 
@@ -61,7 +61,9 @@ async fn add_pending_assignment(guild: GuildId, user: UserId, ctx: &JobContext) 
         "Adding role '{}' to member '{}' of guild '{}'",
         role,
         member.display_name(),
-        guild.name(&ctx.ctx.cache).unwrap_or(guild.to_string())
+        guild
+            .name(&ctx.ctx.cache)
+            .unwrap_or_else(|| guild.to_string())
     );
     member.add_role(&ctx.ctx.http, role).await?;
 
@@ -71,7 +73,7 @@ async fn add_pending_assignment(guild: GuildId, user: UserId, ctx: &JobContext) 
         channel
             .name(&ctx.ctx.cache)
             .await
-            .unwrap_or(channel.to_string())
+            .unwrap_or_else(|| channel.to_string())
     );
     channel
         .send_message(&ctx.ctx.http, |message| {
@@ -100,7 +102,7 @@ async fn get_pending_assignments(pool: &SqlitePool) -> Result<Vec<(GuildId, User
             .await?;
 
     let mut new = vec![];
-    for (guild, user) in rows.into_iter() {
+    for (guild, user) in rows {
         new.push((GuildId(guild.parse()?), UserId(user.parse()?)));
     }
 
@@ -110,7 +112,7 @@ async fn get_pending_assignments(pool: &SqlitePool) -> Result<Vec<(GuildId, User
 async fn remove_expired_assignments(ctx: &JobContext) -> Result<()> {
     let expired = get_expired_assignments(&ctx.db).await?;
 
-    for (guild, user) in expired.into_iter() {
+    for (guild, user) in expired {
         remove_expired_assignment(guild, user, ctx).await?;
     }
 
@@ -129,7 +131,9 @@ async fn remove_expired_assignment(guild: GuildId, user: UserId, ctx: &JobContex
         "Removing role '{}' from member '{}' of guild '{}'",
         role,
         member.display_name(),
-        guild.name(&ctx.ctx.cache).unwrap_or(guild.to_string()),
+        guild
+            .name(&ctx.ctx.cache)
+            .unwrap_or_else(|| guild.to_string()),
     );
     member.remove_role(&ctx.ctx.http, role).await?;
 
@@ -150,7 +154,7 @@ async fn get_expired_assignments(pool: &SqlitePool) -> Result<Vec<(GuildId, User
             .await?;
 
     let mut expired = vec![];
-    for (guild, user) in rows.into_iter() {
+    for (guild, user) in rows {
         expired.push((GuildId(guild.parse()?), UserId(user.parse()?)));
     }
 
