@@ -136,7 +136,7 @@ pub async fn run(token: &str) -> Result<()> {
         .max_connections(5)
         .connect_with(
             SqliteConnectOptions::new()
-                .filename("casper.db")
+                .filename(config::database_path())
                 .create_if_missing(true),
         )
         .await?;
