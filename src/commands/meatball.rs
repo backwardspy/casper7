@@ -42,14 +42,14 @@ pub fn get_commands() -> Vec<CreateApplicationCommand> {
         cmd(NEXT, "Find the next occurring meatball day."),
         cmd_custom(SAVE, "Add your meatball day to the database", |cmd| {
             cmd.add_option(opt(
-                "day",
-                "The day of your meatball day",
+                "month",
+                "The month of your meatball day.",
                 CommandOptionType::Integer,
                 true,
             ))
             .add_option(opt(
-                "month",
-                "The month of your meatball day.",
+                "day",
+                "The day of your meatball day",
                 CommandOptionType::Integer,
                 true,
             ))
@@ -107,7 +107,7 @@ async fn lookup(options: &[CommandDataOption], context: &CommandContext<'_>) -> 
         .fetch_optional(context.db)
         .await?;
 
-    Ok(if let Some((day, month)) = row {
+    Ok(if let Some((month, day)) = row {
         let date = chrono::Utc
             .with_ymd_and_hms(2000, month, day, 0, 0, 0)
             .earliest()
@@ -140,7 +140,7 @@ async fn next(_options: &[CommandDataOption], context: &CommandContext<'_>) -> R
         .await?;
 
     let mut meatball_days = iproduct!(rows, years)
-        .map(|((user, day, month), year)| {
+        .map(|((user, month, day), year)| {
             let date = chrono::Utc
                 .with_ymd_and_hms(year, month, day, 0, 0, 0)
                 .earliest();
@@ -178,9 +178,9 @@ async fn save(options: &[CommandDataOption], context: &CommandContext<'_>) -> Re
         .guild_id
         .ok_or(eyre!("Command run without guild"))?;
 
-    let day = get_integer_option(options, 0).ok_or(eyre!("Expected integer day as option #0"))?;
     let month =
-        get_integer_option(options, 1).ok_or(eyre!("Expected integer month as option #1"))?;
+        get_integer_option(options, 0).ok_or(eyre!("Expected integer month as option #0"))?;
+    let day = get_integer_option(options, 1).ok_or(eyre!("Expected integer day as option #1"))?;
 
     if !(1..=12).contains(&month) {
         return Ok("That's not a real month... :thinking:".to_owned());

@@ -1,7 +1,7 @@
 SELECT
     user_id,
-    day,
-    month
+    month,
+    day
 FROM
     meatball_day
 WHERE
