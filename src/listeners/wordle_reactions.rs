@@ -1,6 +1,6 @@
 use color_eyre::Result;
 use lazy_static::lazy_static;
-use regex::Regex;
+use regex::{Regex, RegexBuilder};
 use serenity::{
     model::prelude::{Message, ReactionType},
     prelude::Context,
@@ -14,7 +14,11 @@ struct Reaction {
 fn react(pattern: &str, emoji: &str) -> Reaction {
     Reaction {
         #[allow(clippy::expect_used)] // skill issue
-        pattern: Regex::new(pattern).expect("failed to compile regex: {pattern}"),
+        pattern: RegexBuilder::new(pattern)
+            .case_insensitive(true)
+            .multi_line(true)
+            .build()
+            .expect("failed to compile regex: {pattern}"),
         emoji: emoji.to_owned(),
     }
 }
