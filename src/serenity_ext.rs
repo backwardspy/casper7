@@ -7,15 +7,8 @@ use serenity::model::{
 };
 
 pub fn get_integer_option(options: &[CommandDataOption], index: usize) -> Option<i64> {
-    let option = match options.get(index) {
-        Some(option) => option,
-        None => return None,
-    };
-
-    let option = match &option.resolved {
-        Some(option) => option,
-        None => return None,
-    };
+    let option = options.get(index)?;
+    let Some(option) = &option.resolved else { return None };
 
     if let CommandDataOptionValue::Integer(value) = option {
         Some(*value)
@@ -25,15 +18,8 @@ pub fn get_integer_option(options: &[CommandDataOption], index: usize) -> Option
 }
 
 pub fn get_user_option(options: &[CommandDataOption], index: usize) -> Option<&User> {
-    let option = match options.get(index) {
-        Some(option) => option,
-        None => return None,
-    };
-
-    let option = match &option.resolved {
-        Some(option) => option,
-        None => return None,
-    };
+    let option = options.get(index)?;
+    let Some(option) = &option.resolved else { return None };
 
     if let CommandDataOptionValue::User(user, _member) = option {
         Some(user)
@@ -43,15 +29,8 @@ pub fn get_user_option(options: &[CommandDataOption], index: usize) -> Option<&U
 }
 
 pub fn get_channel_option(options: &[CommandDataOption], index: usize) -> Option<&PartialChannel> {
-    let option = match options.get(index) {
-        Some(option) => option,
-        None => return None,
-    };
-
-    let option = match &option.resolved {
-        Some(option) => option,
-        None => return None,
-    };
+    let option = options.get(index)?;
+    let Some(option) = &option.resolved else { return None };
 
     if let CommandDataOptionValue::Channel(channel) = option {
         Some(channel)
@@ -61,15 +40,8 @@ pub fn get_channel_option(options: &[CommandDataOption], index: usize) -> Option
 }
 
 pub fn get_role_option(options: &[CommandDataOption], index: usize) -> Option<&Role> {
-    let option = match options.get(index) {
-        Some(option) => option,
-        None => return None,
-    };
-
-    let option = match &option.resolved {
-        Some(option) => option,
-        None => return None,
-    };
+    let option = options.get(index)?;
+    let Some(option) = &option.resolved else { return None };
 
     if let CommandDataOptionValue::Role(role) = option {
         Some(role)
