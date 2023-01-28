@@ -1,10 +1,7 @@
 use color_eyre::Result;
 use lazy_static::lazy_static;
+use poise::serenity_prelude as serenity;
 use regex::{Regex, RegexBuilder};
-use serenity::{
-    model::prelude::{Message, ReactionType},
-    prelude::Context,
-};
 
 struct Reaction {
     pattern: Regex,
@@ -80,11 +77,14 @@ lazy_static! {
     ];
 }
 
-pub async fn dispatch(ctx: &Context, msg: Message) -> Result<()> {
+pub async fn dispatch(ctx: &serenity::Context, msg: &serenity::Message) -> Result<()> {
     for reaction in REACTIONS.iter() {
         if reaction.pattern.is_match(&msg.content) {
-            msg.react(ctx.clone(), ReactionType::Unicode(reaction.emoji.clone()))
-                .await?;
+            msg.react(
+                ctx.clone(),
+                serenity::ReactionType::Unicode(reaction.emoji.clone()),
+            )
+            .await?;
             break;
         }
     }

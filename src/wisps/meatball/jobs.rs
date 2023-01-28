@@ -1,9 +1,6 @@
 use chrono::Datelike;
 use color_eyre::{eyre::eyre, Result};
-use serenity::{
-    model::prelude::{ChannelId, GuildId, RoleId, UserId},
-    prelude::Mentionable,
-};
+use poise::serenity_prelude as serenity;
 use sqlx::SqlitePool;
 use tracing::info;
 
@@ -15,7 +12,7 @@ pub async fn update_role_assignments(ctx: JobContext) -> Result<()> {
     Ok(())
 }
 
-async fn get_guild_role(guild: GuildId, pool: &SqlitePool) -> Result<RoleId> {
+async fn get_guild_role(guild: serenity::GuildId, pool: &SqlitePool) -> Result<serenity::RoleId> {
     let result: (String,) = sqlx::query_as(include_str!("queries/get_guild_meatball_role.sql"))
         .bind(guild.to_string())
         .fetch_one(pool)
@@ -24,10 +21,13 @@ async fn get_guild_role(guild: GuildId, pool: &SqlitePool) -> Result<RoleId> {
             eyre!("failed to get role for guild {guild}. it might not be set yet! ({e})")
         })?;
 
-    Ok(RoleId(result.0.parse()?))
+    Ok(serenity::RoleId(result.0.parse()?))
 }
 
-async fn get_guild_channel(guild: GuildId, pool: &SqlitePool) -> Result<ChannelId> {
+async fn get_guild_channel(
+    guild: serenity::GuildId,
+    pool: &SqlitePool,
+) -> Result<serenity::ChannelId> {
     let result: (String,) = sqlx::query_as(include_str!("queries/get_guild_meatball_channel.sql"))
         .bind(guild.to_string())
         .fetch_one(pool)
@@ -36,7 +36,7 @@ async fn get_guild_channel(guild: GuildId, pool: &SqlitePool) -> Result<ChannelI
             eyre!("failed to get role for guild {guild}. it might not be set yet! ({e})")
         })?;
 
-    Ok(ChannelId(result.0.parse()?))
+    Ok(serenity::ChannelId(result.0.parse()?))
 }
 
 async fn add_pending_assignments(ctx: &JobContext) -> Result<()> {
@@ -49,7 +49,11 @@ async fn add_pending_assignments(ctx: &JobContext) -> Result<()> {
     Ok(())
 }
 
-async fn add_pending_assignment(guild: GuildId, user: UserId, ctx: &JobContext) -> Result<()> {
+async fn add_pending_assignment(
+    guild: serenity::GuildId,
+    user: serenity::UserId,
+    ctx: &JobContext,
+) -> Result<()> {
     // if we fail to add the assignment, we can roll back the transaction
     // and try again later.
     let tx = ctx.db.begin().await?;
@@ -79,7 +83,7 @@ async fn add_pending_assignment(guild: GuildId, user: UserId, ctx: &JobContext) 
         .send_message(&ctx.ctx.http, |message| {
             message.content(format!(
                 "It's {}'s meatball day! :partying_face::tada:",
-                member.mention()
+                serenity::Mention::from(user)
             ))
         })
         .await?;
@@ -92,7 +96,9 @@ async fn add_pending_assignment(guild: GuildId, user: UserId, ctx: &JobContext) 
     Ok(())
 }
 
-async fn get_pending_assignments(pool: &SqlitePool) -> Result<Vec<(GuildId, UserId)>> {
+async fn get_pending_assignments(
+    pool: &SqlitePool,
+) -> Result<Vec<(serenity::GuildId, serenity::UserId)>> {
     let today = chrono::Utc::now();
     let rows: Vec<(String, String)> =
         sqlx::query_as(include_str!("queries/get_pending_meatball_assignments.sql"))
@@ -103,7 +109,10 @@ async fn get_pending_assignments(pool: &SqlitePool) -> Result<Vec<(GuildId, User
 
     let mut new = vec![];
     for (guild, user) in rows {
-        new.push((GuildId(guild.parse()?), UserId(user.parse()?)));
+        new.push((
+            serenity::GuildId(guild.parse()?),
+            serenity::UserId(user.parse()?),
+        ));
     }
 
     Ok(new)
@@ -119,7 +128,11 @@ async fn remove_expired_assignments(ctx: &JobContext) -> Result<()> {
     Ok(())
 }
 
-async fn remove_expired_assignment(guild: GuildId, user: UserId, ctx: &JobContext) -> Result<()> {
+async fn remove_expired_assignment(
+    guild: serenity::GuildId,
+    user: serenity::UserId,
+    ctx: &JobContext,
+) -> Result<()> {
     // if we fail to remove the assignment, we can roll back the transaction
     // and try again later.
     let tx = ctx.db.begin().await?;
@@ -145,7 +158,9 @@ async fn remove_expired_assignment(guild: GuildId, user: UserId, ctx: &JobContex
     Ok(())
 }
 
-async fn get_expired_assignments(pool: &SqlitePool) -> Result<Vec<(GuildId, UserId)>> {
+async fn get_expired_assignments(
+    pool: &SqlitePool,
+) -> Result<Vec<(serenity::GuildId, serenity::UserId)>> {
     let today = chrono::Utc::now();
     let rows: Vec<(String, String)> =
         sqlx::query_as(include_str!("queries/get_expired_meatball_assignments.sql"))
@@ -155,13 +170,20 @@ async fn get_expired_assignments(pool: &SqlitePool) -> Result<Vec<(GuildId, User
 
     let mut expired = vec![];
     for (guild, user) in rows {
-        expired.push((GuildId(guild.parse()?), UserId(user.parse()?)));
+        expired.push((
+            serenity::GuildId(guild.parse()?),
+            serenity::UserId(user.parse()?),
+        ));
     }
 
     Ok(expired)
 }
 
-async fn create_assignment(guild: GuildId, user: UserId, pool: &SqlitePool) -> Result<()> {
+async fn create_assignment(
+    guild: serenity::GuildId,
+    user: serenity::UserId,
+    pool: &SqlitePool,
+) -> Result<()> {
     let now = chrono::Utc::now();
     sqlx::query(include_str!("queries/create_meatball_assignment.sql"))
         .bind(guild.to_string())
@@ -172,7 +194,11 @@ async fn create_assignment(guild: GuildId, user: UserId, pool: &SqlitePool) -> R
     Ok(())
 }
 
-async fn drop_expired_assignment(guild: GuildId, user: UserId, pool: &SqlitePool) -> Result<()> {
+async fn drop_expired_assignment(
+    guild: serenity::GuildId,
+    user: serenity::UserId,
+    pool: &SqlitePool,
+) -> Result<()> {
     sqlx::query(include_str!("queries/drop_meatball_assignment.sql"))
         .bind(guild.to_string())
         .bind(user.to_string())

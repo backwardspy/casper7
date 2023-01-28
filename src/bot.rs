@@ -1,77 +1,72 @@
-use color_eyre::{eyre::eyre, Result};
-use serenity::{
-    async_trait,
-    model::prelude::{
-        command::Command,
-        interaction::{
-            application_command::ApplicationCommandInteraction, Interaction,
-            InteractionResponseType,
-        },
-        GuildId, Message, Ready,
-    },
-    prelude::*,
-    Client,
+use poise::serenity_prelude as serenity;
+use std::future::Future;
+
+use color_eyre::{
+    eyre::{eyre, ErrReport},
+    Result,
 };
 use sqlx::{
     sqlite::{SqliteConnectOptions, SqlitePoolOptions},
     SqlitePool,
 };
-use tokio_cron_scheduler::JobScheduler;
-use tracing::{error, info, instrument};
+use tokio_cron_scheduler::{Job, JobScheduler};
+use tracing::{error, info};
 
-use crate::{commands, config, jobs, listeners};
+use crate::{config, wisps};
 
-#[instrument(skip(ctx))]
-async fn global_command_creator(ctx: &Context) {
-    match Command::set_global_application_commands(&ctx.http, commands::register_all).await {
-        Ok(commands) => {
-            for command in &commands {
-                info!(name = command.name, description = command.description);
-            }
-        }
-        Err(e) => error!("Failed to register global commands: {e}"),
-    }
-}
-
-#[instrument(skip(ctx))]
-async fn guild_command_creator(ctx: &Context, guild_id: GuildId) {
-    match GuildId::set_application_commands(&guild_id, &ctx.http, commands::register_all).await {
-        Ok(commands) => {
-            for command in &commands {
-                info!(name = command.name, description = command.description);
-            }
-        }
-        Err(e) => error!("Failed to register guild commands: {e}"),
-    };
-}
-
-struct Bot {
-    db: SqlitePool,
+pub struct Bot {
+    pub db: SqlitePool,
     scheduler: JobScheduler,
 }
 
-pub struct CommandContext<'a> {
-    pub(crate) db: &'a SqlitePool,
-    pub(crate) interaction: &'a ApplicationCommandInteraction,
-}
+pub type CommandContext<'a> = poise::Context<'a, Bot, ErrReport>;
 
 #[derive(Clone)]
 pub struct JobContext {
-    pub(crate) ctx: Context,
+    pub(crate) ctx: serenity::Context,
     pub(crate) db: SqlitePool,
 }
 
+fn make_job<F, Fut>(name: &str, schedule: &str, callback: F, ctx: JobContext) -> Result<Job>
+where
+    F: Send + Sync + Copy + FnOnce(JobContext) -> Fut + 'static,
+    Fut: Send + Future<Output = Result<()>>,
+{
+    let job_name = name.to_owned();
+    Job::new_async(schedule, move |_uuid, _lock| {
+        let job_name = job_name.clone();
+        let ctx = ctx.clone();
+        Box::pin(async move {
+            match callback(ctx).await {
+                Ok(()) => {
+                    info!("Job {job_name} completed successfully.");
+                }
+                Err(e) => {
+                    error!("Job {job_name} failed: {e}");
+                }
+            }
+        })
+    })
+    .map_err(|e| eyre!("failed to create job {name}: {e}"))
+}
+
 impl Bot {
-    async fn spawn_scheduler(&self, ctx: Context) -> Result<()> {
+    async fn spawn_scheduler(&self, ctx: serenity::Context) -> Result<()> {
         info!("Spawning scheduler");
 
         let job_ctx = JobContext {
             ctx,
             db: self.db.clone(),
         };
-        for job in jobs::all(job_ctx)? {
-            self.scheduler.add(job).await?;
-        }
+
+        self.scheduler
+            .add(make_job(
+                "meatball::update_role_assignments",
+                &config::meatball_assignment_schedule(),
+                wisps::meatball::jobs::update_role_assignments,
+                job_ctx.clone(),
+            )?)
+            .await?;
 
         self.scheduler.start().await?;
 
@@ -79,56 +74,33 @@ impl Bot {
     }
 }
 
-#[async_trait]
-impl EventHandler for Bot {
-    async fn cache_ready(&self, ctx: Context, _guilds: Vec<GuildId>) {
-        if let Err(e) = self.spawn_scheduler(ctx).await {
-            error!("Failed to setup scheduler: {e}");
-        }
-    }
-
-    async fn message(&self, ctx: Context, message: Message) {
-        if let Err(e) = listeners::dispatch(&ctx, message).await {
-            error!("Failure in message listeners: {e}");
-        }
-    }
-
-    async fn ready(&self, ctx: Context, ready: Ready) {
-        info!("{} connected successfully", ready.user.name);
-
-        if let Some(guild_id) = config::testing_guild() {
-            info!("Setting up slash commands for testing guild {guild_id}");
-            guild_command_creator(&ctx, guild_id).await;
-        } else {
-            info!("Setting up global slash commands");
-            global_command_creator(&ctx).await;
-        }
-    }
-
-    async fn interaction_create(&self, ctx: Context, interaction: Interaction) {
-        if let Interaction::ApplicationCommand(command) = interaction {
-            let cmd_ctx = CommandContext {
-                db: &self.db,
-                interaction: &command,
-            };
-
-            match commands::dispatch(&command.data.name, &command.data.options, cmd_ctx).await {
-                Ok(content) => {
-                    if let Err(e) = command
-                        .create_interaction_response(&ctx.http, |response| {
-                            response
-                                .kind(InteractionResponseType::ChannelMessageWithSource)
-                                .interaction_response_data(|message| message.content(content))
-                        })
-                        .await
-                    {
-                        error!("Failed to respond to slash command: {e}");
-                    }
-                }
-                Err(e) => error!("Failed to dispatch command: {e}"),
+async fn event_handler(
+    ctx: &serenity::Context,
+    event: &poise::Event<'_>,
+    _framework: poise::FrameworkContext<'_, Bot, color_eyre::eyre::ErrReport>,
+    bot: &Bot,
+) -> Result<(), color_eyre::eyre::ErrReport> {
+    match event {
+        poise::Event::CacheReady { guilds: _ } => {
+            if let Err(e) = bot.spawn_scheduler(ctx.clone()).await {
+                error!("Failed to setup scheduler: {e}");
             }
         }
+        poise::Event::Message {
+            new_message: message,
+        } => {
+            if let Err(e) = wisps::wordle::listeners::dispatch(ctx, message).await {
+                error!("Failure in message listeners: {e}");
+            }
+        }
+        poise::Event::Ready {
+            data_about_bot: ready,
+        } => {
+            info!("{} connected successfully", ready.user.name);
+        }
+        _ => {}
     }
+    Ok(())
 }
 
 pub async fn run(token: &str) -> Result<()> {
@@ -141,19 +113,42 @@ pub async fn run(token: &str) -> Result<()> {
         )
         .await?;
 
-    let intents = GatewayIntents::non_privileged() | GatewayIntents::MESSAGE_CONTENT;
-    let mut client = Client::builder(token, intents)
-        .event_handler(Bot {
-            db,
-            scheduler: JobScheduler::new().await?,
-        })
-        .await
-        .map_err(|e| eyre!("Failed to create client: {e}"))?;
+    let bot = Bot {
+        db,
+        scheduler: JobScheduler::new().await?,
+    };
 
-    client
-        .start()
-        .await
-        .map_err(|e| eyre!("Failed to start client: {e}"))?;
+    let intents =
+        serenity::GatewayIntents::non_privileged() | serenity::GatewayIntents::MESSAGE_CONTENT;
+    let framework = poise::Framework::builder()
+        .options(poise::FrameworkOptions {
+            commands: wisps::commands(),
+            event_handler: |ctx, event, framework, bot| {
+                Box::pin(event_handler(ctx, event, framework, bot))
+            },
+            ..Default::default()
+        })
+        .token(token)
+        .intents(intents)
+        .setup(|ctx, _ready, framework| {
+            Box::pin(async move {
+                if let Some(guild_id) = config::testing_guild() {
+                    info!("Setting up slash commands for testing guild {guild_id}");
+                    poise::builtins::register_in_guild(
+                        ctx,
+                        &framework.options().commands,
+                        guild_id,
+                    )
+                    .await?;
+                } else {
+                    info!("Setting up global slash commands");
+                    poise::builtins::register_globally(ctx, &framework.options().commands).await?;
+                }
+                Ok(bot)
+            })
+        });
+
+    framework.run().await?;
 
     Ok(())
 }

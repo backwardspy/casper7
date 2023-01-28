@@ -1,7 +1,7 @@
 use std::env;
 
 use color_eyre::{eyre::eyre, Result};
-use serenity::model::prelude::GuildId;
+use poise::serenity_prelude as serenity;
 use tracing::{info, instrument, warn};
 
 pub fn discord_token() -> Result<String> {
@@ -13,7 +13,7 @@ pub fn database_path() -> String {
 }
 
 #[instrument]
-pub fn testing_guild() -> Option<GuildId> {
+pub fn testing_guild() -> Option<serenity::GuildId> {
     let guild_id = match env::var("TESTING_GUILD") {
         Ok(guild_id) => guild_id,
         Err(e) => {
@@ -23,7 +23,7 @@ pub fn testing_guild() -> Option<GuildId> {
     };
 
     match guild_id.parse::<u64>() {
-        Ok(guild_id) => Some(GuildId(guild_id)),
+        Ok(guild_id) => Some(serenity::GuildId(guild_id)),
         Err(e) => {
             warn!("Ignoring $TESTING_GUILD: {e}");
             None

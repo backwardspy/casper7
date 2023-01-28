@@ -6,11 +6,10 @@
     clippy::expect_used
 )]
 mod bot;
-mod commands;
 mod config;
-mod jobs;
-mod listeners;
-mod serenity_ext;
+mod wisps;
+
+pub use bot::Bot;
 
 use color_eyre::eyre::Result;
 use tracing::{instrument, warn};
